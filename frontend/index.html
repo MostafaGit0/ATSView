@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Resume Parser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/styles.css">
+    <script src="./js/app.js" defer></script>
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">ATSView</div>
+            <div class="nav-links">
+                <a href="#" class="active">Analyzer</a>
+                <a href="#">About</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>See What <span class="highlight">ATS Systems</span> See in Your Resume</h1>
+                <p class="subtitle">Upload your resume to learn how it appears to Applicant Tracking Systems and get tips to improve your chances.</p>
+            </div>
+        </section>
+
+        <section class="upload-section">
+            <div class="container">
+                <div class="upload-container" id="dropzone">
+                    <div class="upload-content">
+                        <div class="upload-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                        </div>
+                        <h3>Drag & Drop Your Resume</h3>
+                        <p>Upload PDF or DOCX files <span class="or">or</span></p>
+                        <label for="fileInput" class="browse-button">Browse Files</label>
+                        <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+                        <div id="filePreview" class="file-preview hidden">
+                            <div class="file-info">
+                                <div class="file-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="file-details">
+                                    <span id="fileName">resume.pdf</span>
+                                    <span id="fileSize">125 KB</span>
+                                </div>
+                            </div>
+                            <button id="removeFile" class="remove-button">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button id="analyzeButton" class="analyze-button" disabled>Analyze Resume</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="resultsSection" class="results-section hidden">
+            <div class="container">
+                <div class="results-header">
+                    <h2>ATS Analysis Results</h2>
+                    <p>Here's how your resume appears to Applicant Tracking Systems</p>
+                </div>
+                
+                <div class="results-grid">
+                    <div class="score-card">
+                        <h3>ATS Friendliness Score</h3>
+                        <div class="score-container">
+                            <div class="score-display">
+                                <span id="scoreNumber">--</span>
+                                <span class="score-percent">%</span>
+                            </div>
+                            <div class="score-meter-container">
+                                <div class="score-meter">
+                                    <div id="scoreMeterFill" class="score-meter-fill" style="width: 0%"></div>
+                                </div>
+                                <div class="score-labels">
+                                    <span>Poor</span>
+                                    <span>Good</span>
+                                    <span>Excellent</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="suggestions-card">
+                        <h3>Suggestions for Improvement</h3>
+                        <ul id="suggestionsList" class="suggestions-list">
+                            <li class="suggestion-loading">Loading suggestions...</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="ats-view-container">
+                    <h3>What the ATS Sees</h3>
+                    <p class="subtitle">This is how your information will appear in application forms after being parsed by an ATS</p>
+                    
+                    <div class="ats-form">
+                        <div class="form-section">
+                            <h4>Personal Information</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Full Name</label>
+                                    <div id="parsedName" class="form-field">--</div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Email Address</label>
+                                    <div id="parsedEmail" class="form-field">--</div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Phone Number</label>
+                                    <div id="parsedPhone" class="form-field">--</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-section">
+                            <h4>Skills</h4>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <div id="parsedSkills" class="skills-container">
+                                        <span class="skill-placeholder">No skills detected</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-section">
+                            <h4>Education</h4>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <div id="parsedEducation" class="form-field multiline">--</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-section">
+                            <h4>Experience</h4>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <div id="parsedExperience" class="form-field multiline">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 ATSView. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <p>Analyzing your resume...</p>
+    </div>
+</body>
+</html>
