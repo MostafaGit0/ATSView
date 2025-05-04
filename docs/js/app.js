@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const parsedExperience = document.getElementById('parsedExperience');
 
     // Backend API URL (change this to your actual backend URL when deployed)
-    const API_URL = 'https://ats-resume-parser-api.onrender.com';
+    const API_URL = 'https://atsview.onrender.com';
     
     // For development & testing without a backend
     const DEVELOPMENT_MODE = true; // Set to false when connecting to real backend
@@ -221,10 +221,35 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.suggestions && data.suggestions.length > 0) {
             data.suggestions.forEach(suggestion => {
                 const li = document.createElement('li');
-            li.textContent = 'Your resume looks great! No major issues detected.';
-            suggestionsList.appendChild(li); document.createElement('li');
                 li.textContent = suggestion;
                 suggestionsList.appendChild(li);
             });
         } else {
-            const li =
+            const li = document.createElement('li');
+            li.textContent = 'Your resume looks great! No major issues detected.';
+            suggestionsList.appendChild(li);
+        }
+
+        // Update parsed information
+        parsedName.textContent = data.name || 'Not detected';
+        parsedEmail.textContent = data.email || 'Not detected';
+        parsedPhone.textContent = data.phone || 'Not detected';
+        
+        // Update skills list
+        parsedSkills.innerHTML = '';
+        if (data.skills && data.skills.length > 0) {
+            data.skills.forEach(skill => {
+                const span = document.createElement('span');
+                span.className = 'skill-tag';
+                span.textContent = skill;
+                parsedSkills.appendChild(span);
+            });
+        } else {
+            parsedSkills.textContent = 'No skills detected';
+        }
+        
+        // Update education and experience (replace newlines with HTML breaks)
+        parsedEducation.innerHTML = data.education ? data.education.replace(/\n/g, '<br>') : 'Not detected';
+        parsedExperience.innerHTML = data.experience ? data.experience.replace(/\n/g, '<br>') : 'Not detected';
+    }
+});
