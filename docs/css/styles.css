@@ -511,19 +511,75 @@ nav {
     pointer-events: none;
 }
 
-.loading-spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid rgba(67, 97, 238, 0.1);
-    border-radius: 50%;
-    border-top: 4px solid var(--primary-color);
-    animation: spin 1s linear infinite;
+/* New Water Loading Animation */
+.water-loading-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
     margin-bottom: 20px;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    border: 3px solid var(--primary-color);
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.water-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 50%;
+    background-color: #48cae4; /* Sky blue color */
+    transition: height 0.5s ease;
+    animation: fillWave 2s ease-in-out infinite;
+}
+
+.water-fill::before,
+.water-fill::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 200%;
+    height: 200%;
+    border-radius: 40%;
+}
+
+.water-fill::before {
+    bottom: 0;
+    left: -25%;
+    background: rgba(72, 202, 228, 0.7); /* Semi-transparent sky blue */
+    animation: waterWave 6s linear infinite;
+}
+
+.water-fill::after {
+    bottom: 0;
+    left: -50%;
+    background: rgba(72, 202, 228, 0.5); /* Lighter semi-transparent sky blue */
+    animation: waterWave 8s linear infinite;
+}
+
+.loading-text {
+    margin-top: 10px;
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+@keyframes fillWave {
+    0%, 100% {
+        height: 40%;
+    }
+    50% {
+        height: 60%;
+    }
+}
+
+@keyframes waterWave {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Footer */
