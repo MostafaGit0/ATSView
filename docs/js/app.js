@@ -11,47 +11,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message) {
         alert(message); // Simple alert for now, can be replaced with a nicer error component
     }
-    
-    function simulateApiCall(formData) {
-        // This function simulates an API response for testing purposes
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                const file = formData.get('file');
-                // Simulate different scores based on file type and size
-                const score = Math.floor(Math.random() * 30) + 70; // Random score between 70-99
-                
-                // Simulate different suggestions based on score
-                let suggestions = [];
-                if (score < 80) {
-                    suggestions = [
-                        'Consider adding a summary section at the top of your resume',
-                        'Use more industry-specific keywords to improve ATS matching',
-                        'Make sure all dates are in a consistent format (MM/YYYY)',
-                        'Avoid using tables or complex formatting that might confuse ATS systems'
-                    ];
-                } else if (score < 90) {
-                    suggestions = [
-                        'Consider adding measurable achievements to your experience section',
-                        'Ensure all section headings are clearly labeled (e.g., "Experience", "Education")'
-                    ];
-                } else {
-                    suggestions = ['Your resume format is ATS-friendly'];
-                }
-                
-                // Create a mock response
-                resolve({
-                    name: 'John Smith',
-                    email: 'john.smith@example.com',
-                    phone: '(555) 123-4567',
-                    skills: ['JavaScript', 'React', 'Node.js', 'Python', 'Data Analysis', 'Project Management'],
-                    education: 'Bachelor of Science in Computer Science\nUniversity of California, Berkeley\n2016 - 2020',
-                    experience: 'Software Engineer\nTech Solutions Inc.\nJanuary 2020 - Present\n\nJunior Developer\nStartup Innovations\nJune 2018 - December 2019',
-                    score: score,
-                    suggestions: suggestions
-                });
-            }, 2000); // 2 second delay to simulate processing time
-        });
+
+    // PDF.js library
+    const pdfjsLib = window.pdfjsLib;
+    if (pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
+    
     // DOM Elements
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
@@ -73,15 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const parsedSkills = document.getElementById('parsedSkills');
     const parsedEducation = document.getElementById('parsedEducation');
     const parsedExperience = document.getElementById('parsedExperience');
-
-    // Backend API URL (change this to your actual backend URL when deployed)
-    const API_URL = 'https://atsview.onrender.com';
-    
-    // For development & testing without a backend
-    const DEVELOPMENT_MODE = true; // Set to false when connecting to real backend
     
     // File object to store the uploaded file
     let uploadedFile = null;
+    let extractedText = "";
 
     // Handle file selection
     fileInput.addEventListener('change', (e) => {
@@ -146,67 +107,344 @@ document.addEventListener('DOMContentLoaded', () => {
     // Function to reset file upload
     function resetFileUpload() {
         uploadedFile = null;
+        extractedText = "";
         fileInput.value = '';
         filePreview.classList.add('hidden');
         analyzeButton.disabled = true;
     }
 
+    // Function to extract text from PDF
+    async function extractTextFromPDF(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                try {
+                    const typedArray = new Uint8Array(event.target.result);
+                    const pdf = await pdfjsLib.getDocument(typedArray).promise;
+                    let fullText = '';
+                    
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + '\n';
+                    }
+                    
+                    resolve(fullText);
+                } catch (error) {
+                    console.error('Error extracting text from PDF:', error);
+                    reject(error);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // Function to extract text from DOCX using Mammoth.js
+    async function extractTextFromDOCX(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    mammoth.extractRawText({ arrayBuffer: event.target.result })
+                        .then(result => resolve(result.value))
+                        .catch(reject);
+                } catch (error) {
+                    console.error('Error extracting text from DOCX:', error);
+                    reject(error);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // Function to extract name
+    function extractName(text) {
+        // Common name patterns at the top of resumes
+        const namePatterns = [
+            /^([A-Z][a-z]+(?: [A-Z][a-z]+)+)$/m,  // First Last at beginning of line
+            /^([A-Z][A-Z]+(?: [A-Z][a-z]+)+)$/m,  // JOHN Smith
+            /^([A-Z][a-z]+ [A-Z]\. [A-Z][a-z]+)$/m,  // First M. Last
+        ];
+        
+        // Get the first 10 lines (likely to contain the name)
+        const firstLines = text.split('\n').slice(0, 10).join('\n');
+        
+        for (const pattern of namePatterns) {
+            const match = firstLines.match(pattern);
+            if (match && match[1]) {
+                return match[1].trim();
+            }
+        }
+        
+        // Fallback: look for capitalized words at beginning, likely a name
+        const lines = text.split('\n').slice(0, 5);
+        for (const line of lines) {
+            const cleanLine = line.trim();
+            if (cleanLine && cleanLine.length > 3 && cleanLine.length < 40) {
+                // Check if it looks like a name (capitalized words, no special chars)
+                if (/^[A-Z][a-z]+(?: [A-Z][a-z]+)+$/.test(cleanLine)) {
+                    return cleanLine;
+                }
+            }
+        }
+        
+        return 'Not detected';
+    }
+
+    // Function to extract email
+    function extractEmail(text) {
+        const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+        const match = text.match(emailPattern);
+        return match ? match[0] : 'Not detected';
+    }
+
+    // Function to extract phone
+    function extractPhone(text) {
+        // Various phone number formats
+        const phonePatterns = [
+            /\b\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b/,  // (123) 456-7890 or 123-456-7890
+            /\b(\+\d{1,3}[-.\s]?)?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b/  // +1 (123) 456-7890
+        ];
+        
+        for (const pattern of phonePatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                return match[0];
+            }
+        }
+        
+        return 'Not detected';
+    }
+
+    // Function to extract skills
+    function extractSkills(text) {
+        const commonSkills = [
+            // Programming Languages
+            "Python", "Java", "JavaScript", "C\\+\\+", "C#", "Ruby", "PHP", "Swift", "Kotlin", "Go", "Rust",
+            // Web Technologies
+            "HTML", "CSS", "React", "Angular", "Vue", "Node.js", "Express", "Django", "Flask", "Spring Boot",
+            // Databases
+            "SQL", "MySQL", "PostgreSQL", "MongoDB", "Oracle", "DynamoDB", "Firebase",
+            // Cloud Platforms
+            "AWS", "Azure", "Google Cloud", "Heroku", "Netlify", "Vercel",
+            // DevOps & Tools
+            "Docker", "Kubernetes", "Jenkins", "Git", "GitHub", "GitLab", "CI/CD", "Terraform",
+            // Data Science & AI
+            "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch", "pandas", "NumPy", "Data Analysis",
+            "NLP", "Computer Vision", "AI",
+            // Mobile
+            "Android", "iOS", "React Native", "Flutter", "Xamarin",
+            // Microsoft Office
+            "Word", "Excel", "PowerPoint", "Outlook", "Microsoft Office",
+            // Design
+            "Photoshop", "Illustrator", "InDesign", "Figma", "Sketch", "UX/UI", "UX Design", "UI Design",
+            // Languages
+            "English", "Spanish", "French", "German", "Chinese", "Japanese", "Korean",
+            // Soft Skills
+            "Project Management", "Team Leadership", "Communication", "Problem Solving", "Agile", "Scrum", 
+            "Critical Thinking", "Teamwork", "Time Management"
+        ];
+        
+        // Create a regex pattern to search for skills
+        const pattern = new RegExp("\\b(" + commonSkills.join("|") + ")\\b", "gi");
+        const matches = text.match(pattern) || [];
+        
+        // Remove duplicates (case-insensitive)
+        const uniqueSkills = [];
+        matches.forEach(skill => {
+            if (!uniqueSkills.some(s => s.toLowerCase() === skill.toLowerCase())) {
+                uniqueSkills.push(skill);
+            }
+        });
+        
+        return uniqueSkills;
+    }
+
+    // Function to extract education
+    function extractEducation(text) {
+        // Look for education section
+        const educationPatterns = [
+            /EDUCATION(?:[\s\S]*?)(?=EXPERIENCE|SKILLS|PROJECTS|\n\n\n|$)/i,
+            /ACADEMIC(?:[\s\S]*?)(?=EXPERIENCE|SKILLS|PROJECTS|\n\n\n|$)/i,
+            /QUALIFICATION(?:[\s\S]*?)(?=EXPERIENCE|SKILLS|PROJECTS|\n\n\n|$)/i
+        ];
+        
+        for (const pattern of educationPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                return match[0].trim();
+            }
+        }
+        
+        // If no section found, try to find degree mentions
+        const degreePattern = /(Bachelor|Master|PhD|B\.S\.|M\.S\.|B\.A\.|M\.A\.|B\.Tech|M\.Tech|MBA)(?:[\s\S]*?)(?=\n\n|$)/i;
+        const match = text.match(degreePattern);
+        if (match) {
+            return match[0].trim();
+        }
+        
+        return 'Not detected';
+    }
+
+    // Function to extract experience
+    function extractExperience(text) {
+        // Look for experience section
+        const experiencePatterns = [
+            /(?:EXPERIENCE|EMPLOYMENT|WORK HISTORY)(?:[\s\S]*?)(?=EDUCATION|SKILLS|PROJECTS|\n\n\n|$)/i,
+            /(?:PROFESSIONAL BACKGROUND)(?:[\s\S]*?)(?=EDUCATION|SKILLS|PROJECTS|\n\n\n|$)/i
+        ];
+        
+        for (const pattern of experiencePatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                return match[0].trim();
+            }
+        }
+        
+        return 'Not detected';
+    }
+
+    // Function to calculate ATS score
+    function calculateATSScore(parsedData, text) {
+        let score = 70; // Base score
+        let suggestions = [];
+        
+        // Check for key sections presence
+        if (parsedData.name === 'Not detected') {
+            score -= 5;
+            suggestions.push("Include your full name prominently at the top of your resume");
+        }
+        
+        if (parsedData.email === 'Not detected') {
+            score -= 5;
+            suggestions.push("Add a professional email address");
+        }
+        
+        if (parsedData.phone === 'Not detected') {
+            score -= 3;
+            suggestions.push("Include a phone number for contact");
+        }
+        
+        // Check skills
+        const skillsCount = parsedData.skills.length;
+        if (skillsCount === 0) {
+            score -= 10;
+            suggestions.push("Add a dedicated skills section with relevant keywords");
+        } else if (skillsCount < 5) {
+            score -= 5;
+            suggestions.push("Consider adding more relevant skills to improve keyword matching");
+        } else {
+            score += 5;
+        }
+        
+        // Check education
+        if (parsedData.education === 'Not detected') {
+            score -= 5;
+            suggestions.push("Include your educational background");
+        }
+        
+        // Check experience
+        if (parsedData.experience === 'Not detected') {
+            score -= 10;
+            suggestions.push("Add your work experience with clear job titles and dates");
+        }
+        
+        // Check for common formatting issues
+        if (/[│┃┆┇┊┋╎╏┆┇┊┋]/.test(text)) { // Vertical bars often indicate tables
+            score -= 5;
+            suggestions.push("Avoid using tables or columns as they may confuse ATS systems");
+        }
+        
+        // Check for section headers
+        if (!/(EXPERIENCE|EMPLOYMENT|WORK HISTORY)/i.test(text)) {
+            score -= 3;
+            suggestions.push("Use clear section headers like 'Experience', 'Education', and 'Skills'");
+        }
+        
+        // Check for date formats
+        const dateFormats = (text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w* \d{4}\b/g) || []).length;
+        if (dateFormats < 2) {
+            suggestions.push("Use a consistent date format (Month YYYY) for work and education entries");
+        }
+        
+        // Check length
+        const wordCount = text.split(/\s+/).length;
+        if (wordCount < 200) {
+            score -= 5;
+            suggestions.push("Your resume may be too short - consider adding more details");
+        } else if (wordCount > 1000) {
+            score -= 3;
+            suggestions.push("Your resume is quite lengthy - consider focusing on the most relevant information");
+        }
+        
+        // Summary/Objective section check
+        if (!/(SUMMARY|OBJECTIVE|PROFILE)/i.test(text)) {
+            suggestions.push("Consider adding a summary section highlighting your key qualifications");
+        }
+        
+        // Cap the score
+        score = Math.max(Math.min(score, 100), 0);
+        
+        return { score, suggestions };
+    }
+
     // Function to analyze the resume
-    function analyzeResume(file) {
+    async function analyzeResume(file) {
         // Show loading overlay
         loadingOverlay.classList.remove('hidden');
         
-        // Create form data
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        if (DEVELOPMENT_MODE) {
-            // Simulate API call for development
-            simulateApiCall(formData)
-                .then(data => {
-                    // Update the UI with the parsed data
-                    updateResults(data);
-                    
-                    // Hide loading overlay and show results
-                    loadingOverlay.classList.add('hidden');
-                    resultsSection.classList.remove('hidden');
-                    
-                    // Scroll to results section
-                    resultsSection.scrollIntoView({ behavior: 'smooth' });
-                })
-                .catch(error => {
-                    loadingOverlay.classList.add('hidden');
-                    showError('An error occurred while analyzing your resume. Please try again.');
-                    console.error('Error:', error);
-                });
-        } else {
-            // Real API call to the backend
-            fetch(`${API_URL}/upload`, {
-                method: 'POST',
-                body: formData,
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Server responded with an error');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Update the UI with the parsed data
-                    updateResults(data);
-                    
-                    // Hide loading overlay and show results
-                    loadingOverlay.classList.add('hidden');
-                    resultsSection.classList.remove('hidden');
-                    
-                    // Scroll to results section
-                    resultsSection.scrollIntoView({ behavior: 'smooth' });
-                })
-                .catch(error => {
-                    loadingOverlay.classList.add('hidden');
-                    showError('An error occurred while analyzing your resume. Please try again.');
-                    console.error('Error:', error);
-                });
+        try {
+            // Extract text based on file type
+            if (file.type === 'application/pdf') {
+                if (!window.pdfjsLib) {
+                    throw new Error('PDF.js library not loaded. Please ensure you have an internet connection.');
+                }
+                extractedText = await extractTextFromPDF(file);
+            } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                if (!window.mammoth) {
+                    throw new Error('Mammoth.js library not loaded. Please ensure you have an internet connection.');
+                }
+                extractedText = await extractTextFromDOCX(file);
+            } else {
+                throw new Error('Unsupported file type');
+            }
+            
+            if (!extractedText || extractedText.trim() === '') {
+                throw new Error('Could not extract text from file');
+            }
+            
+            // Parse the extracted text
+            const parsedData = {
+                name: extractName(extractedText),
+                email: extractEmail(extractedText),
+                phone: extractPhone(extractedText),
+                skills: extractSkills(extractedText),
+                education: extractEducation(extractedText),
+                experience: extractExperience(extractedText)
+            };
+            
+            // Calculate ATS friendliness score
+            const { score, suggestions } = calculateATSScore(parsedData, extractedText);
+            parsedData.score = score;
+            parsedData.suggestions = suggestions;
+            
+            // Update the UI with the parsed data
+            updateResults(parsedData);
+            
+            // Hide loading overlay and show results
+            loadingOverlay.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+            
+            // Scroll to results section
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+            
+        } catch (error) {
+            loadingOverlay.classList.add('hidden');
+            showError(`An error occurred: ${error.message}`);
+            console.error('Error:', error);
         }
     }
 
@@ -231,9 +469,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Update parsed information
-        parsedName.textContent = data.name || 'Not detected';
-        parsedEmail.textContent = data.email || 'Not detected';
-        parsedPhone.textContent = data.phone || 'Not detected';
+        parsedName.textContent = data.name;
+        parsedEmail.textContent = data.email;
+        parsedPhone.textContent = data.phone;
         
         // Update skills list
         parsedSkills.innerHTML = '';

@@ -8,6 +8,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./css/styles.css">
+    <!-- Add PDF.js CDN for PDF parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- Add Mammoth.js for DOCX parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <!-- Load our app script last -->
     <script src="./js/app.js" defer></script>
 </head>
 <body>
@@ -177,10 +182,8 @@
     </footer>
 
     <div id="loadingOverlay" class="loading-overlay hidden">
-        <div class="water-loading-container">
-            <div class="water-fill"></div>
-        </div>
-        <p class="loading-text">Analyzing your resume...</p>
+        <div class="loading-spinner"></div>
+        <p>Analyzing your resume...</p>
     </div>
 </body>
 </html>
